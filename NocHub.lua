@@ -7,6 +7,7 @@ local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/rel
 -- SERVICES --
 -----------------------
 local Players = cloneref(game:GetService('Players'))
+local ReplicatedStorage = cloneref(game:GetService('ReplicatedStorage'))
 local RunService = cloneref(game:GetService('RunService'))
 local HttpService = cloneref(game:GetService('HttpService'))
 
@@ -134,6 +135,9 @@ function HitboxController(param, doWillShowESP)
                     end
                 end
             end)
+        end
+
+        if not doWillShowESP then
         end
     end
 end
