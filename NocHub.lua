@@ -6,12 +6,46 @@ local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/rel
 -----------------------
 -- SERVICES --
 -----------------------
+local Players = cloneref(game:GetService('Players'))
 local RunService = cloneref(game:GetService('RunService'))
 local HttpService = cloneref(game:GetService('HttpService'))
 
 -----------------------
+-- PLAYER STUFF --
+-----------------------
+local plr  = Players.LocalPlayer
+local char = plr.Character or plr.CharacterAdded:Wait()
+local hum  = char:WaitForChild('Humanoid')
+local hrp = char:FindFirstChild('HumanoidRootPart')
+
+local oldPlayerSpeed = char:GetAttribute('SpeedMultiplier')
+
+-----------------------
 -- VARIABLES --
 -----------------------
+
+-- @SOME ANTI CHEAT BYPASS STUFF
+local index
+local newindex
+local namecall
+
+local ToHook = {
+	["walkspeed"] = hum.WalkSpeed,
+	["jumppower"] = hum.JumpPower
+}
+
+-- @TABLES
+local FastAttackAPI = {}
+
+-- @LOADED PLAYERS - CHARACTERS
+local LoadedPlayers = {}
+local LoadedCharacters = {}
+
+-- @HITBOX STUFF
+local HitboxConfig = {
+    PlayerHitboxSize = Vector3.new(2, 2, 2),
+    NPCHitboxSize = Vector3.new(2, 2, 2)
+}
 
 -- @AUTO FARM
 local AutoFarmState = {}
@@ -19,6 +53,106 @@ local AutoFarmConfig = {
     AUTO_FARM_TYPE = "",
     TWEEN_SPEED = 0 -- for now
 }
+
+-----------------------
+-- FUNCTIONS --
+-----------------------
+function PlayerSpeedController(val)
+    if typeof(val) ~= 'number' then
+        return false
+    end
+
+    char:SetAttribute('SpeedMultiplier', val)
+end
+
+function FastAttackController(val)
+    if typeof(val) ~= 'boolean' then
+        return false
+    end
+
+    if val then
+        print('STARTING THE FAST ATTACK!')
+    end
+
+    if not val then
+        print('STOPPING THE FAST ATTACK')
+    end
+end
+
+function HitboxController(param, doWillShowESP)
+    if param:lower() == 'players' then
+        print('PASSED THE PARAM ARGUMENT')
+        if doWillShowESP then
+            print('PASSED THE doWillShowESP ARGUMENT')
+            for _, val in pairs(workspace:WaitForChild('Characters'):GetChildren()) do
+                if val.Name ~= char.Name then
+                    local targetHRP = val:FindFirstChild('HumanoidRootPart')
+
+                    if targetHRP then
+                        targetHRP.Transparency = 0.75
+                        targetHRP.Color = Color3.fromHex('#ff0000')
+                        targetHRP.Size = HitboxConfig.PlayerHitboxSize
+                    end
+                end
+            end
+        end
+
+        if not doWillShowESP then
+            -- empty for now
+        end
+    end
+
+    local _connection1
+
+    if param:lower() == 'npcs' then
+        print('PASSED THE PARAM ARGUMENT')
+        if doWillShowESP then
+            print('PASSED THE doWillShowESP ARGUMENT')
+            -- locate the _WorldOrigin and the NPC PATH
+            local _WorldOrigin = workspace:FindFirstChild('_WorldOrigin')
+            local Enemies = _WorldOrigin:FindFirstChild('Enemies')
+
+            _connection1 = Enemies.ChildAdded:Connect(function(addedInstance)
+                if addedInstance:IsA('Model') then
+                    local ENEMY_HRP = addedInstance:FindFirstChild('HumanoidRootPart')
+
+                    if (ENEMY_HRP) then
+                        ENEMY_HRP.Transparency = 0.75
+                        targetHRP.Color = Color3.fromHex('#ff0000')
+                        targetHRP.Size = HitboxConfig.NPCHitboxSize
+                    end
+                end
+            end)
+
+            _connection2 = Enemies.ChildRemoved:Connect(function(removedInstance)
+                if removedInstance:IsA('Model') then
+                    local ENEMY_HRP = removedInstance:FindFirstChild('HumanoidRootPart')
+
+                    if (ENEMY_HRP) ENEMY_HRP.Transparency ~= 1 then
+                        ENEMY_HRP.Transparency = 1
+                        ENEMY_HRP.Size = HitboxConfig.NPCHitboxSize
+                    end
+                end
+            end)
+        end
+    end
+end
+
+function HitboxSizeController(param, val)
+    if typeof(param) ~= 'string' or typeof(val) ~= 'number' then
+        return false
+    end
+
+    if param:lower() == 'player' then
+        HitboxConfig.PlayerHitboxSize = Vector3.new(val, val, val)
+    end
+
+    if param:lower() == 'npc' then
+        HitboxConfig.NPCHitboxSize = Vector3.new(val, val, val)
+    end
+end
+
+-- UI CONFIGURATION --
 
 WindUI:Notify({
     Title = "Message from developer!",
@@ -101,6 +235,10 @@ local TABS = {
         Title = "Ana Sayfa", Icon = 'door-open'
     }),
 
+     Player = FeatureSection:Tab({
+        Title = "Oyuncu", Icon = 'door-open'
+    }),
+
     Raid = FeatureSection:Tab({
         Title = "Raid", Icon = 'door-open'
     }),
@@ -109,20 +247,20 @@ local TABS = {
         Title = "Sea", Icon = 'door-open'
     }),
 
-    Player = FeatureSection:Tab({
-        Title = "Oyuncu", Icon = 'door-open'
+    Other = FeatureSection:Tab({
+        Title = "Other", Icon = 'door-open'
     }),
 }
 
 -----------------------
 -- AUTO FARM SECTION --
 -----------------------
-local StartAutoFarm = TABS.Main:Button({
+local StartAutoFarm = TABS.Main:Toggle({
     Title = "Auto Farm'ı Başlat!",
     Desc = "AUTO FARMI BAŞLATIR",
 
-    Callback = function()
-        print('AUTO FARM BAŞLATILIYOR!')
+    Callback = function(value)
+        print('AUTO FARM: ' .. value)
     end,
 })
 
@@ -143,7 +281,7 @@ local AutoFarmTypeConfiguration = TABS.Main:Dropdown({
     AllowNone = true,
 
     Callback = function(selectedValue)
-
+        AutoFarmConfig.AUTO_FARM_TYPE = selectedValue
     end,
 })
 
@@ -168,8 +306,44 @@ local AutoFarmSpeedConfiguration = TABS.Main:Dropdown({
 -----------------------
 -- PLAYER SECTION --
 -----------------------
-local MevlanaSpinSpeed = TABS.Player:Button({
+local ResetPlayerSpeed = TABS.Player:Button({
+    Title = "Koşma hızını sıfırla",
+    Desc = "Koşma hızını sıfırlar ve eski haline getirir",
+
+    Callback = function()
+        PlayerSpeedController(oldPlayerSpeed)
+    end,
+})
+
+local PlayerSpeed = TABS.Player:Slider({
+    Title = "Koşma Hızı",
+    Desc = "Koşma hızını ayarlayabilirsin!",
+
+    IsToolTip = true,
+    IsTextbox = true,
+    Width = 100,
+    Step = 1,
+
+    Value = {
+        Min = 1,
+        Max = 30,
+        Default = oldPlayerSpeed
+    },
+
+    Callback = function(sliderValue)
+        PlayerSpeedController(sliderValue)
+    end,
+})
+
+TABS.Player:Space()
+
+local MevlanaSpinSpeed = TABS.Player:Toggle({
     Title = "Mevlana Spin'i başlat!",
+    Desc = "Mevlana gibi dönmeyi başlatır/durdurur!",
+
+    Callback = function(value)
+        print('value')
+    end,
 })
 
 local MevlanaSpinSpeedConfiguration = TABS.Player:Slider({
@@ -178,7 +352,7 @@ local MevlanaSpinSpeedConfiguration = TABS.Player:Slider({
 
     IsToolTip = true,
     IsTextbox = true,
-    Width = 200,
+    Width = 100,
     Step = 1,
 
     Value = {
@@ -192,4 +366,109 @@ local MevlanaSpinSpeedConfiguration = TABS.Player:Slider({
     end,
 })
 
+-----------------------
+-- OTHER SECTION --
+-----------------------
+local FastAttack = TABS.Other:Toggle({
+    Title = "Fast Attack",
+    Desc = "Fast Attack'ı başlatır/durdurur!",
+
+    Callback = function(selectedValue)
+        FastAttackController(selectedValue)
+        print('Fast Attack State: '.. selectedValue)
+    end,
+})
+
+TABS.Other:Space()
+
+local PlayerHitboxESP = TABS.Other:Toggle({
+    Title = "Oyuncu Hitbox ESP",
+    Desc = "Shows the hitboxes of players",
+
+    Callback = function(selectedValue)
+        HitboxController('players', selectedValue)
+    end,
+})
+
+local NPCHitboxESP = TABS.Other:Toggle({
+    Title = "NPC Hitbox ESP",
+    Desc = "Shows the hitboxes of the npcs",
+
+    Callback = function(selectedValue)
+        HitboxController('npcs', selectedValue)
+    end,
+})
+
+TABS.Other:Space()
+
+local PlayerHitboxSizeConfiguration = TABS.Other:Slider({
+    Title = "Oyuncu Hitbox Genişletici",
+    Desc = "Oyuncuların Hitboxunu genişletmesine/küçültmesine sağlar",
+
+    IsToolTip = true,
+    IsTextbox = true,
+
+    Width = 100,
+    Step = 1,
+
+    Value = {
+        Min = 1,
+        Max = 40,
+        Default = 2
+    },
+
+    Callback = function(sliderValue)
+        HitboxSizeController('player', sliderValue)
+    end,
+})
+
+local NPCHitboxSizeConfiguration = TABS.Other:Slider({
+    Title = "NPC Hitbox Genişletici",
+    Desc = "NPClerin Hitboxunu genişletmesine/küçültmesine sağlar",
+
+    IsToolTip = true,
+    IsTextbox = true,
+
+    Width = 100,
+    Step = 1,
+
+    Value = {
+        Min = 1,
+        Max = 40,
+        Default = 2
+    },
+
+    Callback = function(sliderValue)
+        HitboxSizeController('npc', sliderValue)
+    end,
+})
+
 TABS.About:Select()
+
+--[[
+index = hookmetamethod(game,"__index", function(self, property)
+	if not checkcaller() and self:IsA("Humanoid") and self:IsDescendantOf(player.Character) and ToHook[property:lower()] then
+		--print(property, " is being called, here is a fake value : ", ToHook[property:lower()])
+		return ToHook[property:lower()]
+	end
+	return index(self,property)
+end)
+
+newindex = hookmetamethod(game,"__newindex", function(self, property, NewValue)
+	if not checkcaller() and self:IsA("Humanoid") and self:IsDescendantOf(player.Character) and ToHook[property:lower()] then
+		--print(property, " is being edited, here is the new fake value : ", NewValue)
+		ToHook[property:lower()] = NewValue
+		return ToHook[property:lower()]
+	end
+	return newindex(self,property, NewValue)
+end)
+
+namecall = hookmetamethod(game,"__namecall", function(self, ...)
+	local namecallmethod = getnamecallmethod()
+	if self == player and namecallmethod == "Kick" then
+		print("NO KICK")
+		return 
+	end
+	return namecall(self,...)
+end)
+]]--
