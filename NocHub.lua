@@ -129,7 +129,7 @@ function HitboxController(param, doWillShowESP)
                 if removedInstance:IsA('Model') then
                     local ENEMY_HRP = removedInstance:FindFirstChild('HumanoidRootPart')
 
-                    if (ENEMY_HRP) ENEMY_HRP.Transparency ~= 1 then
+                    if (ENEMY_HRP) and ENEMY_HRP.Transparency ~= 1 then
                         ENEMY_HRP.Transparency = 1
                         ENEMY_HRP.Size = HitboxConfig.NPCHitboxSize
                     end
