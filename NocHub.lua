@@ -211,19 +211,41 @@ function HitboxController(param, doWillShowESP)
                         end
                     end
                 end)
-            end
-
+            end  
+          
             return true
         end
 
         if not doWillShowESP and not IsPlayerHitboxESPOn  then
             local CharactersF = workspace:FindFirstChild('Characters')
             
-            for targetCharInstance, _connectionName in pairs(LoadedCharacters)
-            
-        end
+            for targetCharInstance, _ in pairs(CharactersF:GetChildren()) do
+                local targetHRP = targetCharInstance:FindFirstChild('HumanoidRootPart')
 
+                if targetHRP then
+                    targetHRP.Transparency = 1
+                    targetHRP.Size = HitboxConfig.PlayerHitboxSizeDefault
+                end
+            end
+            
         
+            for targetCharInstance, connectionName in pairs(LoadedCharacters) do
+                if LoadedCharacters[targetCharInstance] ~= nil then
+                    stopConnectionFromTargetPlayer(targetChar, connectionName)
+                    clearConnectionFromTargetPlayer(targetChar, connectionName)
+                end
+            end
+            
+            if _connectionOfCharFAdded then
+                _connectionOfCharFAdded:Disconnect()
+                _connectionOfCharFAdded = nil
+            end
+
+            if _connectionOfCharFRemoved then
+                _connectionOfCharFRemoved:Disconnect()
+                _connectionOfCharFRemoved = nil
+            end
+        end
     end
 
     if param:lower() == 'npcs' then
