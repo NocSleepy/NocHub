@@ -35,6 +35,16 @@ local ToHook = {
 	["jumppower"] = hum.JumpPower
 }
 
+-- @SOME HITVBOX THINGS
+local IsPlayerHitboxESPOn = false
+local IsNPCHitboxESPOn = false
+
+-- @CONNECTIONS 
+local _connectionOfCharFAdded
+local _connectionOfCharFRemoved
+local _connectionOfEnemiesFAdded
+local _connectionOfEnemiesFRemoved
+
 -- @TABLES
 local FastAttackAPI = {}
 
@@ -44,7 +54,9 @@ local LoadedCharacters = {}
 
 -- @HITBOX STUFF
 local HitboxConfig = {
+    PlayerHitboxSizeDefault = Vector3.new(2, 2, 2)
     PlayerHitboxSize = Vector3.new(2, 2, 2),
+    NPCHitboxSizeDefault = Vector3.new(2, 2, 2)
     NPCHitboxSize = Vector3.new(2, 2, 2)
 }
 
@@ -84,7 +96,7 @@ function HitboxController(param, doWillShowESP)
     if param:lower() == 'players' then
         print('PASSED THE PARAM ARGUMENT')
         if doWillShowESP then
-            print('PASSED THE doWillShowESP ARGUMENT')
+            print('PASSED THE doWillShowESP ARGUMENT')THE 
             for _, val in pairs(workspace:WaitForChild('Characters'):GetChildren()) do
                 if val.Name ~= char.Name then
                     local targetHRP = val:FindFirstChild('HumanoidRootPart')
@@ -96,6 +108,8 @@ function HitboxController(param, doWillShowESP)
                     end
                 end
             end
+
+            return true
         end
 
         if not doWillShowESP then
@@ -103,41 +117,68 @@ function HitboxController(param, doWillShowESP)
         end
     end
 
-    local _connection1
-
     if param:lower() == 'npcs' then
         print('PASSED THE PARAM ARGUMENT')
-        if doWillShowESP then
-            print('PASSED THE doWillShowESP ARGUMENT')
-            -- locate the _WorldOrigin and the NPC PATH
-            local _WorldOrigin = workspace:FindFirstChild('_WorldOrigin')
-            local Enemies = _WorldOrigin:FindFirstChild('Enemies')
+        if doWillShowESP and IsNPCHitboxESPOn then
+            print('STARTING THE NPC HITBOX ESP')
+            local Enemies = workspace:FindfirstChild('Enemies')
+            
+            _connectionOfEnemiesFAdded = Enemies.ChildAdded:Connect(function(addedInstance)
+                print('some debug for child added function i think')
+                local IsAModel = addedInstance:IsA('Model')
+                
+                if (IsAModel) and addedInstance:FindFirstChild('HumanoidRootPart') then
+                    print('WORKING ON THE ENEMY NPCS')
 
-            _connection1 = Enemies.ChildAdded:Connect(function(addedInstance)
-                if addedInstance:IsA('Model') then
-                    local ENEMY_HRP = addedInstance:FindFirstChild('HumanoidRootPart')
-
-                    if (ENEMY_HRP) then
-                        ENEMY_HRP.Transparency = 0.75
-                        targetHRP.Color = Color3.fromHex('#ff0000')
-                        targetHRP.Size = HitboxConfig.NPCHitboxSize
+                    local EnemyHRP = addedInstance:FindFirstChild('HumanoidRootPart')
+                    
+                    if EnemyHRP then
+                        EnemyHRP.Transparency = 0.5
+                        EnemyHRP.Color = Color3.fromHex('#ff0000')
+                        EnemyHRP.Size = HitboxConfig.NPCHitboxSize
                     end
                 end
             end)
 
-            _connection2 = Enemies.ChildRemoved:Connect(function(removedInstance)
-                if removedInstance:IsA('Model') then
-                    local ENEMY_HRP = removedInstance:FindFirstChild('HumanoidRootPart')
+            _connectionOfEnemiesFRemoved = Enemies.ChildRemoved:Connect(function(removedInstance)
+                print('some debug for child removed function i think')
+                local IsAModel = removedInstance:FindFirstChild('HumanoidRootPart')
 
-                    if (ENEMY_HRP) ENEMY_HRP.Transparency ~= 1 then
-                        ENEMY_HRP.Transparency = 1
-                        ENEMY_HRP.Size = HitboxConfig.NPCHitboxSize
+                if IsAModel then
+                    local EnemyHRP = removedInstance:FindFirstChild('HumanoidRootPart')
+                    
+                    if EnemyHRP then
+                        EnemyHRP.Transparency = 1
+                        EnemyHRP.Size = HitboxConfig.NPCHitboxSizeDefault
                     end
                 end
             end)
         end
 
-        if not doWillShowESP then
+        if not doWillShowESP and not isNPCHitboxESPOn then
+            print('STOPPING THE NPC HITBOX ESP')
+            local Enemies = workspace:FindFirstChild('Enemies')
+
+            for _, instances in pairs(Enemies:GetChildren()) do
+                if instances:IsA('Model') then
+                    local EnemyHRP = instances:FindFirstChild('HumanoidRootPart')
+
+                    EnemyHRP.Transparency = 1
+                    EnemyHRP.Size = HitboxConfig.NPCHitboxSizeDefault
+                end
+            end
+
+            if _connectionOfEnemiesFAdded then
+                _connectionOfEnemiesFAdded:Disconnect()
+                _connectionOfEnemiesFAdded = nil
+            end
+
+            if _connectionOfEnemiesFRemoved then
+                _connectionOfEnemiesFRemoved:Disconnect()
+                _connectionOfEnemiesFRemoved = nil
+            end
+
+            return true
         end
     end
 end
@@ -149,10 +190,12 @@ function HitboxSizeController(param, val)
 
     if param:lower() == 'player' then
         HitboxConfig.PlayerHitboxSize = Vector3.new(val, val, val)
+        return true
     end
 
     if param:lower() == 'npc' then
         HitboxConfig.NPCHitboxSize = Vector3.new(val, val, val)
+        return true
     end
 end
 
@@ -418,7 +461,7 @@ local PlayerHitboxSizeConfiguration = TABS.Other:Slider({
     Value = {
         Min = 1,
         Max = 40,
-        Default = 2
+        Default = HitboxConfig.PlayerHitboxSize
     },
 
     Callback = function(sliderValue)
@@ -439,7 +482,7 @@ local NPCHitboxSizeConfiguration = TABS.Other:Slider({
     Value = {
         Min = 1,
         Max = 40,
-        Default = 2
+        Default = HitboxConfig.NPCHitboxSizeDefault
     },
 
     Callback = function(sliderValue)
