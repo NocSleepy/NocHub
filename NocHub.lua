@@ -35,16 +35,35 @@ local ToHook = {
 	["jumppower"] = hum.JumpPower
 }
 
+-- @SOME HITVBOX THINGS
+local IsPlayerHitboxESPOn = false
+local IsNPCHitboxESPOn = false
+
+-- @CONNECTIONS
+local _connectionOfCharFAdded
+local _connectionOfCharFRemoved
+
+local _connectionOfEnemiesFAdded
+local _connectionOfEnemiesFRemoved
+local _connectionOfEnemyPropertyChanged
+
+
 -- @TABLES
 local FastAttackAPI = {}
 
--- @LOADED PLAYERS - CHARACTERS
-local LoadedPlayers = {}
+-- @LOADED CHARACTERS
 local LoadedCharacters = {}
+local LoadedEnemies = {}
+
+local stoppedConnection
+local stoppedConnections = {}
 
 -- @HITBOX STUFF
 local HitboxConfig = {
+    PlayerHitboxSizeDefault = Vector3.new(2, 2, 2),
     PlayerHitboxSize = Vector3.new(2, 2, 2),
+
+    NPCHitboxSizeDefault = Vector3.new(2, 2, 2),
     NPCHitboxSize = Vector3.new(2, 2, 2)
 }
 
@@ -58,6 +77,34 @@ local AutoFarmConfig = {
 -----------------------
 -- FUNCTIONS --
 -----------------------
+function addConnectionToTargetPlayer(param, targetChar, connectionName, connectionTask)
+    if param:lower() == 'new' then
+        if LoadedCharacters[targetChar] == nil then
+            LoadedCharacters[targetChar] = {}
+        end
+    end
+
+    if param:lower() == 'add' then
+        if LoadedCharacters[targetChar] ~= nil then
+            LoadedCharacters[targetChar][connectionName] = connectionTask
+        end
+    end
+end
+
+function stopConnectionFromTargetPlayer(targetChar, connectionName)
+    if LoadedCharacters[targetChar] ~= nil and LoadedCharacters[targetChar][connectionName] ~= nil then
+        LoadedCharacters[targetChar][connectionName]:Disconnect()
+        return connectionName
+    end
+end
+
+function clearConnectionFromTargetPlayer(targetChar, connectionName)
+    if LoaadedCharacters[targetChar] ~= nil and LoadedCharacters[targetChar][connectionName] ~= nil then
+        LoadedCharacters[targetChar][connectionName] = nil
+        stoppedConnections[targetChar][connectionName] = nil
+    end
+end
+
 function PlayerSpeedController(val)
     if typeof(val) ~= 'number' then
         return false
@@ -83,61 +130,178 @@ end
 function HitboxController(param, doWillShowESP)
     if param:lower() == 'players' then
         print('PASSED THE PARAM ARGUMENT')
-        if doWillShowESP then
-            print('PASSED THE doWillShowESP ARGUMENT')
-            for _, val in pairs(workspace:WaitForChild('Characters'):GetChildren()) do
-                if val.Name ~= char.Name then
-                    local targetHRP = val:FindFirstChild('HumanoidRootPart')
+        if doWillShowESP and IsPlayerHitboxESPOn then
+            local CharactersF = workspace:FindFirstChild('Characters')
 
-                    if targetHRP then
-                        targetHRP.Transparency = 0.75
-                        targetHRP.Color = Color3.fromHex('#ff0000')
-                        targetHRP.Size = HitboxConfig.PlayerHitboxSize
+            for _, instances in pairs(CharactersF:GetChildren()) do
+                if (instances:IsA('Model')) and instances.Name ~= char.Name then
+                    local targetPlayerHRP = instances:FindFirstChild('HumanoidRootPart')
+
+                    if targetPlayerHRP.Transparency == 1 then
+                        targetPlayerHRP.Transparency = 0.5
+                        targetPlayerHRP.Color =  Color3.fromHex('#ff0000')
+                        targetPlayerHRP.Size = HitboxConfig.PlayerHitboxSize
                     end
+
+                    if LoadedCharacters[instances] == nil then
+                        addConnectionToTargetPlayer('new', instances)
+
+                        addConnectionToTargetPlayer('new', instances, '_connectdionOfHRPPropertySizeChanged', targetPlayerHRP:GetPropertyChangedSignal('Size'):Connect(function()
+                            targetPlayerHRP.Size = HitboxConfig.PlayerHitboxSize
+                        end))
+
+                        addConnectionToTargetPlayer('add', instances, '_connectionOfHRPPropertyColorChanged', targetPlayerHRP:GetPropertyChangedSignal('Color'):Connect(function()
+                            targetPlayerHRP.Color = Color3.fromHex('#ff0000')
+                        end))
+                    end
+                else
+                    return false
                 end
+                
+                _connectionOfCharFAdded = CharactersF.ChildAdded:Connect(function(addedInstance)
+                    local IsAModel = addedInstance:IsA('Model')
+                    
+                    if IsAModel then
+                        local targetPlayerHRP = addedInstance:FindFirstChild('HumanoidRootPart')
+
+                        if (targetPlayerHRP) and targetPlayerHRP.Transparency == 1 then
+                            targetPlayerHRP.Transparency = 0.5
+                            targetPlayerHRP.Color =  Color3.fromHex('#ff0000')
+                            targetPlayuerHRP.Size = HitboxConfig.PlayerHitboxSize
+                        end
+
+                        if LoadedCharacters[addedInstance] == nil then
+                            addConnectionToTargetPlayer('new', addedInstance)
+                            
+                            addConnectionToTargetPlayer('add', addedInstance, targetPlayerHRP:GetPropertyChangedSignal('Size'):Connect(function()
+                                targetPlayerHRP.Size = HitboxConfig.PlayerHitboxSize
+                            end))
+
+                            addConnectionToTargetPlayer('add', addedInstance, targetPlayerHRP:GetPropertyChangedSignal('Color'):Connect(function()
+                                targetPlayerHRP.Color = Color3.fromHex('#ff0000')
+                            end))
+                        end
+                    end
+                end)
+
+                _connectionOfCharFRemoved = CharactersF.ChildRemoved:Connect(function(removedInstance)
+                    if removedInstance:IsA('Model') then
+                        if LoadedCharacters[removedInstance] ~= nil then
+
+                            for targetCharInstance, connectionName in pairs(LoadedCharacters) do
+                                if targetCharInstance == removedInstance then
+                                    stoppedConnection = stopConnectionFromTargetPlayer(targetCharInstance, connectionName)
+                                    stoppedConnections = {
+                                        [targetCharInstance] = { [connectionName] = stoppedConnection }
+                                    }
+                                end
+                            end
+                            
+                            stoppedConnection = nil
+
+                            
+                            for targetCharInstance, connectionName in pairs(stoppedConnections) do
+                                if (stoppedConnections[targetCharInstance] ~= nil) and stoppedConnections[targetCharInstance][connectionName] then
+                                    pcall(clearConnectionFromTargetPlayer, targetCharInstance, connectionName)
+                                end
+                            end
+
+                            stoppedConnections[removedInstance] = nil
+                            LoadedCharacters[removedInstance] = nil
+                        end
+                    end
+                end)
             end
+
+            return true
         end
 
-        if not doWillShowESP then
-            -- empty for now
+        if not doWillShowESP and not IsPlayerHitboxESPOn  then
+            local CharactersF = workspace:FindFirstChild('Characters')
+            
+            for targetCharInstance, _connectionName in pairs(LoadedCharacters)
+            
         end
+
+        
     end
-
-    local _connection1
 
     if param:lower() == 'npcs' then
         print('PASSED THE PARAM ARGUMENT')
-        if doWillShowESP then
-            print('PASSED THE doWillShowESP ARGUMENT')
-            -- locate the _WorldOrigin and the NPC PATH
-            local _WorldOrigin = workspace:FindFirstChild('_WorldOrigin')
-            local Enemies = _WorldOrigin:FindFirstChild('Enemies')
+        if doWillShowESP and IsNPCHitboxESPOn then
+            print('STARTING THE NPC HITBOX ESP')
+            local Enemies = workspace:FindfirstChild('Enemies')
+            
+            for _, instances in pairs(Enemies:GetChildren()) do
+                if instances:IsA('Model') then
+                    local EnemyHRP = instances:FindFirstChild('HumanoidRootPart')
 
-            _connection1 = Enemies.ChildAdded:Connect(function(addedInstance)
-                if addedInstance:IsA('Model') then
-                    local ENEMY_HRP = addedInstance:FindFirstChild('HumanoidRootPart')
+                    if (EnemyHRP) and EnemyHRP.Transparency == 1 then
+                        EnemyHRP.Tranaparency = 0.5
+                        EnemyHRP.Color = Color3.fromHex('#ff0000')
+                        EnemyHRP.Size = HitboxConfig.NPCHitboxSize
+                    end
+                end
+            end
+            
+            _connectionOfEnemiesFAdded = Enemies.ChildAdded:Connect(function(addedInstance)
+                print('some debug for child added function i think')
+                local IsAModel = addedInstance:IsA('Model')
+                
+                if (IsAModel) and addedInstance:FindFirstChild('HumanoidRootPart') then
+                    print('WORKING ON THE ENEMY NPCS')
 
-                    if (ENEMY_HRP) then
-                        ENEMY_HRP.Transparency = 0.75
-                        targetHRP.Color = Color3.fromHex('#ff0000')
-                        targetHRP.Size = HitboxConfig.NPCHitboxSize
+                    local EnemyHRP = addedInstance:FindFirstChild('HumanoidRootPart')
+                    
+                    if EnemyHRP then
+                        EnemyHRP.Transparency = 0.5
+                        EnemyHRP.Color = Color3.fromHex('#ff0000')
+                        EnemyHRP.Size = HitboxConfig.NPCHitboxSize
                     end
                 end
             end)
 
-            _connection2 = Enemies.ChildRemoved:Connect(function(removedInstance)
-                if removedInstance:IsA('Model') then
-                    local ENEMY_HRP = removedInstance:FindFirstChild('HumanoidRootPart')
+            _connectionOfEnemiesFRemoved = Enemies.ChildRemoved:Connect(function(removedInstance)
+                print('some debug for child removed function i think')
+                local IsAModel = removedInstance:FindFirstChild('HumanoidRootPart')
 
-                    if (ENEMY_HRP) and ENEMY_HRP.Transparency ~= 1 then
-                        ENEMY_HRP.Transparency = 1
-                        ENEMY_HRP.Size = HitboxConfig.NPCHitboxSize
+                if IsAModel then
+                    local EnemyHRP = removedInstance:FindFirstChild('HumanoidRootPart')
+                    
+                    if EnemyHRP then
+                        EnemyHRP.Transparency = 1
+                        EnemyHRP.Size = HitboxConfig.NPCHitboxSizeDefault
                     end
                 end
             end)
+
+            return true
         end
 
-        if not doWillShowESP then
+        if not doWillShowESP and not isNPCHitboxESPOn then
+            print('STOPPING THE NPC HITBOX ESP')
+            local Enemies = workspace:FindFirstChild('Enemies')
+
+            for _, instances in pairs(Enemies:GetChildren()) do
+                if instances:IsA('Model') then
+                    local EnemyHRP = instances:FindFirstChild('HumanoidRootPart')
+
+                    EnemyHRP.Transparency = 1
+                    EnemyHRP.Size = HitboxConfig.NPCHitboxSizeDefault
+                end
+            end
+
+            if _connectionOfEnemiesFAdded then
+                _connectionOfEnemiesFAdded:Disconnect()
+                _connectionOfEnemiesFAdded = nil
+            end
+
+            if _connectionOfEnemiesFRemoved then
+                _connectionOfEnemiesFRemoved:Disconnect()
+                _connectionOfEnemiesFRemoved = nil
+            end
+
+            return true
         end
     end
 end
@@ -149,10 +313,12 @@ function HitboxSizeController(param, val)
 
     if param:lower() == 'player' then
         HitboxConfig.PlayerHitboxSize = Vector3.new(val, val, val)
+        return true
     end
 
     if param:lower() == 'npc' then
         HitboxConfig.NPCHitboxSize = Vector3.new(val, val, val)
+        return true
     end
 end
 
@@ -399,6 +565,7 @@ local NPCHitboxESP = TABS.Other:Toggle({
     Desc = "Shows the hitboxes of the npcs",
 
     Callback = function(selectedValue)
+        IsNPCHitboxESPOn = selectedValue
         HitboxController('npcs', selectedValue)
     end,
 })
@@ -418,7 +585,7 @@ local PlayerHitboxSizeConfiguration = TABS.Other:Slider({
     Value = {
         Min = 1,
         Max = 40,
-        Default = 2
+        Default = HitboxConfig.PlayerHitboxSize
     },
 
     Callback = function(sliderValue)
@@ -439,7 +606,7 @@ local NPCHitboxSizeConfiguration = TABS.Other:Slider({
     Value = {
         Min = 1,
         Max = 40,
-        Default = 2
+        Default = HitboxConfig.NPCHitboxSizeDefault
     },
 
     Callback = function(sliderValue)
