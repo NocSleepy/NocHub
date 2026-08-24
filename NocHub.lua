@@ -4,6 +4,14 @@
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 
 -----------------------
+-- MY LIBRARIES --
+-----------------------
+local TestLibrary = loadstring(game:HttpGet("https://raw.githubusercontent.com/NocSleepy/Libraries/refs/heads/main/Test/TestLibrary.lua"))()
+local Connection = loadstring(game:HttpGet("https://raw.githubusercontent.com/NocSleepy/Libraries/refs/heads/main/Connection/Connection.lua"))()
+
+TestLibrary:TestFunction()
+
+-----------------------
 -- SERVICES --
 -----------------------
 local Players = cloneref(game:GetService('Players'))
