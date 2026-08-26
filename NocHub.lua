@@ -32,6 +32,9 @@ local oldPlayerSpeed = char:GetAttribute('SpeedMultiplier')
 -----------------------
 -- VARIABLES --
 -----------------------
+-- SOME VARIABLES AND PATHS ABOUT GAME
+local Characters = workspace:FindFirstChild('Characters')
+local Enemies = workspace:FindFirstChild('Enemies')
 
 -- @SOME ANTI CHEAT BYPASS STUFF
 local index
@@ -43,82 +46,89 @@ local ToHook = {
 	["jumppower"] = hum.JumpPower
 }
 
--- @SOME HITVBOX THINGS
-local IsPlayerHitboxESPOn = false
-local IsNPCHitboxESPOn = false
+local LoadedCharacters = {}
+local LoadedEnemies = {}
 
 -- @CONNECTIONS
-local _connectionOfCharFAdded
-local _connectionOfCharFRemoved
+local _connectionOfCharFAdded = Characters.ChildAdded:Connect(function(addedInstance)
+    if (addedInstance:IsA('Model')) and LoadedCharacters[addedInstance] == nil then
+        local targetHRP = addedInstance:FindFirstChild('HumanoidRootPart')
 
-local _connectionOfEnemiesFAdded
-local _connectionOfEnemiesFRemoved
-local _connectionOfEnemyPropertyChanged
+        LoadedCharacters[addedInstance] = {
+            defaultHitboxSize = targetHRP.Size
+        }
+    end
+end)
+
+local _connectionOfCharFRemoved = Characters.ChildRemoved:Connect(function(removedInstance)
+    if (removedInstance:IsA('Model')) and LoadedCharacters[removedInstance] ~= nil then
+        LoadedCharacters[removedInstance] = nil
+    end
+end)
+
+local _connectionOfEnemiesFAdded = Enemies.ChildAdded:Connect(funcntion(addedInstance)
+    if (addedInstance:IsA('Model')) and LoadedEnemies[addedInstance] == nil then
+        local targetHRP = addedInstance:FindFirstChild('HumanoidRootPart')
+
+        LoadedEnemies[addedInstance] = {
+            defaultHitboxSize = targetHRP.Size
+        }
+    end
+end)
+
+local _connectionOfEnemiesFRemoved = Enemies.ChildRemoved:Connect(function(removedInstance)
+    if (removedInstance:IsA('Model')) and LoadedEnemies[removedInstance] ~= nil then
+       LoadedEnemies[removedInstance] = nil
+    end
+end)
 
 
 -- @TABLES
 local FastAttackAPI = {}
 
--- @LOADED CHARACTERS
-local LoadedCharacters = {}
-local LoadedEnemies = {}
 
-local stoppedConnection
-local stoppedConnections = {}
+-- @SPIN STUFF
+local SECONDS_PER_ROTATION = 3 -- 1 full rotation in 3 5seconds since we chose 1.5
 
 -- @HITBOX STUFF
 local HitboxConfig = {
-    PlayerHitboxSizeDefault = Vector3.new(2, 2, 2),
-    PlayerHitboxSize = Vector3.new(2, 2, 2),
-
-    NPCHitboxSizeDefault = Vector3.new(2, 2, 2),
-    NPCHitboxSize = Vector3.new(2, 2, 2)
+    PlayerHitboxSize = nil
+    NPCHitboxSize = nil
 }
 
 -- @AUTO FARM
 local AutoFarmState = {}
 local AutoFarmConfig = {
     AUTO_FARM_TYPE = "",
-    TWEEN_SPEED = 0 -- for now
+    TWEEN_SPEED = "" -- for now
 }
 
 -----------------------
 -- FUNCTIONS --
------------------------
-function addConnectionToTargetPlayer(param, targetChar, connectionName, connectionTask)
-    if param:lower() == 'new' then
-        if LoadedCharacters[targetChar] == nil then
-            LoadedCharacters[targetChar] = {}
-        end
-    end
-
-    if param:lower() == 'add' then
-        if LoadedCharacters[targetChar] ~= nil then
-            LoadedCharacters[targetChar][connectionName] = connectionTask
-        end
-    end
-end
-
-function stopConnectionFromTargetPlayer(targetChar, connectionName)
-    if LoadedCharacters[targetChar] ~= nil and LoadedCharacters[targetChar][connectionName] ~= nil then
-        LoadedCharacters[targetChar][connectionName]:Disconnect()
-        return connectionName
-    end
-end
-
-function clearConnectionFromTargetPlayer(targetChar, connectionName)
-    if LoaadedCharacters[targetChar] ~= nil and LoadedCharacters[targetChar][connectionName] ~= nil then
-        LoadedCharacters[targetChar][connectionName] = nil
-        stoppedConnections[targetChar][connectionName] = nil
-    end
-end
-
+------------------------
 function PlayerSpeedController(val)
     if typeof(val) ~= 'number' then
         return false
     end
 
     char:SetAttribute('SpeedMultiplier', val)
+end
+
+function MevlanaSpinController(val)
+    if not rotateCharacter or rotateCharacter == nil and val then
+        rotateCharacter = RunService.RenderStepped:Connect(function(dt)
+            if char then
+                local rotation = (360 / SECONDS_PER_ROTATION)
+
+                hrp.CFrame *= CFrame.Angles(0, math.rad(rotation), 0)
+            end
+        end)
+    end
+    
+    if not val and rotateCharacter then
+        rotateCharacter:Disconnect()
+        rotateCharacter = nil
+    end
 end
 
 function FastAttackController(val)
@@ -138,201 +148,35 @@ end
 function HitboxController(param, doWillShowESP)
     if param:lower() == 'players' then
         print('PASSED THE PARAM ARGUMENT')
-        if doWillShowESP and IsPlayerHitboxESPOn then
-            local CharactersF = workspace:FindFirstChild('Characters')
-
-            for _, instances in pairs(CharactersF:GetChildren()) do
-                if (instances:IsA('Model')) and instances.Name ~= char.Name then
-                    local targetPlayerHRP = instances:FindFirstChild('HumanoidRootPart')
-
-                    if targetPlayerHRP.Transparency == 1 then
-                        targetPlayerHRP.Transparency = 0.5
-                        targetPlayerHRP.Color =  Color3.fromHex('#ff0000')
-                        targetPlayerHRP.Size = HitboxConfig.PlayerHitboxSize
-                    end
-
-                    if LoadedCharacters[instances] == nil then
-                        addConnectionToTargetPlayer('new', instances)
-
-                        addConnectionToTargetPlayer('new', instances, '_connectdionOfHRPPropertySizeChanged', targetPlayerHRP:GetPropertyChangedSignal('Size'):Connect(function()
-                            targetPlayerHRP.Size = HitboxConfig.PlayerHitboxSize
-                        end))
-
-                        addConnectionToTargetPlayer('add', instances, '_connectionOfHRPPropertyColorChanged', targetPlayerHRP:GetPropertyChangedSignal('Color'):Connect(function()
-                            targetPlayerHRP.Color = Color3.fromHex('#ff0000')
-                        end))
-                    end
-                else
-                    return false
-                end
-                
-                _connectionOfCharFAdded = CharactersF.ChildAdded:Connect(function(addedInstance)
-                    local IsAModel = addedInstance:IsA('Model')
+        if doWillShowESP then
+            for charInstance, _ in pairs(LoadedCharacters) do
+                if charInstance:IsA('Model') then
+                    local targetHRP = charInstance:FindFirstChild('HumanoidRootPart')
                     
-                    if IsAModel then
-                        local targetPlayerHRP = addedInstance:FindFirstChild('HumanoidRootPart')
-
-                        if (targetPlayerHRP) and targetPlayerHRP.Transparency == 1 then
-                            targetPlayerHRP.Transparency = 0.5
-                            targetPlayerHRP.Color =  Color3.fromHex('#ff0000')
-                            targetPlayuerHRP.Size = HitboxConfig.PlayerHitboxSize
-                        end
-
-                        if LoadedCharacters[addedInstance] == nil then
-                            addConnectionToTargetPlayer('new', addedInstance)
-                            
-                            addConnectionToTargetPlayer('add', addedInstance, targetPlayerHRP:GetPropertyChangedSignal('Size'):Connect(function()
-                                targetPlayerHRP.Size = HitboxConfig.PlayerHitboxSize
-                            end))
-
-                            addConnectionToTargetPlayer('add', addedInstance, targetPlayerHRP:GetPropertyChangedSignal('Color'):Connect(function()
-                                targetPlayerHRP.Color = Color3.fromHex('#ff0000')
-                            end))
-                        end
+                    if (targetHRP) and targetHRP.Size == LoadedCharacters[charInstance].defaultHitboxSize or targetHRP.Transparency == 1 then
+                        targetHRP.Transparency = 0.75
+                        targetHRP.Size = HitboxConfig.PlayerHitboxSize
+                        targetHRP.Color =  Color3.fromHex('#ff0000')
                     end
-                end)
-
-                _connectionOfCharFRemoved = CharactersF.ChildRemoved:Connect(function(removedInstance)
-                    if removedInstance:IsA('Model') then
-                        if LoadedCharacters[removedInstance] ~= nil then
-
-                            for targetCharInstance, connectionName in pairs(LoadedCharacters) do
-                                if targetCharInstance == removedInstance then
-                                    stoppedConnection = stopConnectionFromTargetPlayer(targetCharInstance, connectionName)
-                                    stoppedConnections = {
-                                        [targetCharInstance] = { [connectionName] = stoppedConnection }
-                                    }
-                                end
-                            end
-                            
-                            stoppedConnection = nil
-
-                            
-                            for targetCharInstance, connectionName in pairs(stoppedConnections) do
-                                if (stoppedConnections[targetCharInstance] ~= nil) and stoppedConnections[targetCharInstance][connectionName] then
-                                    pcall(clearConnectionFromTargetPlayer, targetCharInstance, connectionName)
-                                end
-                            end
-
-                            stoppedConnections[removedInstance] = nil
-                            LoadedCharacters[removedInstance] = nil
-                        end
-                    end
-                end)
-            end  
-          
-            return true
+                end
+            end
         end
-
-        if not doWillShowESP and not IsPlayerHitboxESPOn  then
-            local CharactersF = workspace:FindFirstChild('Characters')
-            
-            for targetCharInstance, _ in pairs(CharactersF:GetChildren()) do
-                local targetHRP = targetCharInstance:FindFirstChild('HumanoidRootPart')
-
-                if targetHRP then
-                    targetHRP.Transparency = 1
-                    targetHRP.Size = HitboxConfig.PlayerHitboxSizeDefault
-                end
-            end
-            
         
-            for targetCharInstance, connectionName in pairs(LoadedCharacters) do
-                if LoadedCharacters[targetCharInstance] ~= nil then
-                    stopConnectionFromTargetPlayer(targetChar, connectionName)
-                    clearConnectionFromTargetPlayer(targetChar, connectionName)
+        if not doWillShowESP then
+            for charInstance, _ in pairs(LoadedCharacters) do
+                if charInstance:IsA('Model') then
+                    local targetHRP = charInstance:FindFirstChild('HumanoidRootPart')
+                    
+                    if (targetHRP) = charInstance:FindFirstChild('HumanoidRootPart') and targetHRP.Transparency ~= 1 then
+                        targetHRP.Transparency = 1
+                        targetHRP.Size = LoadedCharacters[charInstance].defaultHitboxSize
+                    end
                 end
-            end
-            
-            if _connectionOfCharFAdded then
-                _connectionOfCharFAdded:Disconnect()
-                _connectionOfCharFAdded = nil
-            end
-
-            if _connectionOfCharFRemoved then
-                _connectionOfCharFRemoved:Disconnect()
-                _connectionOfCharFRemoved = nil
             end
         end
     end
-
+    
     if param:lower() == 'npcs' then
-        print('PASSED THE PARAM ARGUMENT')
-        if doWillShowESP and IsNPCHitboxESPOn then
-            print('STARTING THE NPC HITBOX ESP')
-            local Enemies = workspace:FindfirstChild('Enemies')
-            
-            for _, instances in pairs(Enemies:GetChildren()) do
-                if instances:IsA('Model') then
-                    local EnemyHRP = instances:FindFirstChild('HumanoidRootPart')
-
-                    if (EnemyHRP) and EnemyHRP.Transparency == 1 then
-                        EnemyHRP.Tranaparency = 0.5
-                        EnemyHRP.Color = Color3.fromHex('#ff0000')
-                        EnemyHRP.Size = HitboxConfig.NPCHitboxSize
-                    end
-                end
-            end
-            
-            _connectionOfEnemiesFAdded = Enemies.ChildAdded:Connect(function(addedInstance)
-                print('some debug for child added function i think')
-                local IsAModel = addedInstance:IsA('Model')
-                
-                if (IsAModel) and addedInstance:FindFirstChild('HumanoidRootPart') then
-                    print('WORKING ON THE ENEMY NPCS')
-
-                    local EnemyHRP = addedInstance:FindFirstChild('HumanoidRootPart')
-                    
-                    if EnemyHRP then
-                        EnemyHRP.Transparency = 0.5
-                        EnemyHRP.Color = Color3.fromHex('#ff0000')
-                        EnemyHRP.Size = HitboxConfig.NPCHitboxSize
-                    end
-                end
-            end)
-
-            _connectionOfEnemiesFRemoved = Enemies.ChildRemoved:Connect(function(removedInstance)
-                print('some debug for child removed function i think')
-                local IsAModel = removedInstance:FindFirstChild('HumanoidRootPart')
-
-                if IsAModel then
-                    local EnemyHRP = removedInstance:FindFirstChild('HumanoidRootPart')
-                    
-                    if EnemyHRP then
-                        EnemyHRP.Transparency = 1
-                        EnemyHRP.Size = HitboxConfig.NPCHitboxSizeDefault
-                    end
-                end
-            end)
-
-            return true
-        end
-
-        if not doWillShowESP and not isNPCHitboxESPOn then
-            print('STOPPING THE NPC HITBOX ESP')
-            local Enemies = workspace:FindFirstChild('Enemies')
-
-            for _, instances in pairs(Enemies:GetChildren()) do
-                if instances:IsA('Model') then
-                    local EnemyHRP = instances:FindFirstChild('HumanoidRootPart')
-
-                    EnemyHRP.Transparency = 1
-                    EnemyHRP.Size = HitboxConfig.NPCHitboxSizeDefault
-                end
-            end
-
-            if _connectionOfEnemiesFAdded then
-                _connectionOfEnemiesFAdded:Disconnect()
-                _connectionOfEnemiesFAdded = nil
-            end
-
-            if _connectionOfEnemiesFRemoved then
-                _connectionOfEnemiesFRemoved:Disconnect()
-                _connectionOfEnemiesFRemoved = nil
-            end
-
-            return true
-        end
     end
 end
 
@@ -351,6 +195,14 @@ function HitboxSizeController(param, val)
         return true
     end
 end
+
+char:GetAttributeChangedSignal('PlayerHitboxESPOn'):Connect(function()
+    local newValue = char:GetAttribute('PlayerHitboxESPOn')
+end)
+
+char:GetAttributeChangedSignal('NPCHitboxESPOn'):Connect(function()
+    local newValue = char:GetAttribute('NPCHitboxESPOn')
+end)
 
 -- UI CONFIGURATION --
 
@@ -373,24 +225,24 @@ local Window = WindUI:CreateWindow({
     SideBarWidth = 200,
 
     OpenButton = {
-		Title = "Open The Noc Hub",
-		CornerRadius = UDim.new(1, 0),
-		StrokeThickness = 3,
-		Enabled = true,
-		Draggable = true,
-		OnlyMobile = false,
-		Scale = 0.5,
+		    Title = "Open The Noc Hub",
+		    CornerRadius = UDim.new(1, 0),
+		    StrokeThickness = 3,
+		    Enabled = true,
+		    Draggable = true,
+		    OnlyMobile = false,
+		    Scale = 0.5,
 
-		Color = ColorSequence.new( -- gradient
-			Color3.fromHex("#30FF6A"),
-			Color3.fromHex("#e7ff2f")
-		),
-	},
+		    Color = ColorSequence.new( -- gradient
+			    Color3.fromHex("#30FF6A"),
+			    Color3.fromHex("#e7ff2f")
+		  ),
+	  },
 
     Topbar = {
-		Height = 44,
-		ButtonsType = "Mac", -- Default or Mac
-	},
+		    Height = 44,
+		    ButtonsType = "Mac", -- Default or Mac
+	  },
 
     User = {
         Enabled = true,
@@ -541,8 +393,8 @@ local MevlanaSpinSpeed = TABS.Player:Toggle({
     Title = "Mevlana Spin'i başlat!",
     Desc = "Mevlana gibi dönmeyi başlatır/durdurur!",
 
-    Callback = function(value)
-        print('value')
+    Callback = function(selectedValue)
+        MevlanaSpinController(selectedValue)
     end,
 })
 
@@ -558,11 +410,11 @@ local MevlanaSpinSpeedConfiguration = TABS.Player:Slider({
     Value = {
         Min = 1,
         Max = 20,
-        Default = 1
+        Default = SECONDS_PER_ROTATION
     },
 
     Callback = function(sliderValue)
-        print(sliderValue)
+        SECONDS_PER_ROTATION = sliderValue
     end,
 })
 
@@ -586,6 +438,8 @@ local PlayerHitboxESP = TABS.Other:Toggle({
     Desc = "Shows the hitboxes of players",
 
     Callback = function(selectedValue)
+        char:SetAttribute('PlayerHitboxESPOn', selectedValue)
+
         HitboxController('players', selectedValue)
     end,
 })
@@ -595,7 +449,8 @@ local NPCHitboxESP = TABS.Other:Toggle({
     Desc = "Shows the hitboxes of the npcs",
 
     Callback = function(selectedValue)
-        IsNPCHitboxESPOn = selectedValue
+        char:SetAttribute('NPCHitboxESPOn', selectedValue)
+
         HitboxController('npcs', selectedValue)
     end,
 })
