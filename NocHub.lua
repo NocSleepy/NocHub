@@ -66,7 +66,7 @@ local _connectionOfCharFRemoved = Characters.ChildRemoved:Connect(function(remov
     end
 end)
 
-local _connectionOfEnemiesFAdded = Enemies.ChildAdded:Connect(funcntion(addedInstance)
+local _connectionOfEnemiesFAdded = Enemies.ChildAdded:Connect(function(addedInstance)
     if (addedInstance:IsA('Model')) and LoadedEnemies[addedInstance] == nil then
         local targetHRP = addedInstance:FindFirstChild('HumanoidRootPart')
 
