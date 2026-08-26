@@ -92,7 +92,7 @@ local SECONDS_PER_ROTATION = 3 -- 1 full rotation in 3 5seconds since we chose 1
 
 -- @HITBOX STUFF
 local HitboxConfig = {
-    PlayerHitboxSize = nil
+    PlayerHitboxSize = nil,
     NPCHitboxSize = nil
 }
 
@@ -167,7 +167,7 @@ function HitboxController(param, doWillShowESP)
                 if charInstance:IsA('Model') then
                     local targetHRP = charInstance:FindFirstChild('HumanoidRootPart')
                     
-                    if (targetHRP) = charInstance:FindFirstChild('HumanoidRootPart') and targetHRP.Transparency ~= 1 then
+                    if (targetHRP) and targetHRP.Transparency ~= 1 then
                         targetHRP.Transparency = 1
                         targetHRP.Size = LoadedCharacters[charInstance].defaultHitboxSize
                     end
