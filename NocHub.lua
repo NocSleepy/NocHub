@@ -6,10 +6,10 @@ local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/rel
 -----------------------
 -- MY LIBRARIES --
 -----------------------
-local TestLibrary = loadstring(game:HttpGet("https://raw.githubusercontent.com/NocSleepy/Libraries/refs/heads/main/Test/TestLibrary.lua"))()
-local Connection = loadstring(game:HttpGet("https://raw.githubusercontent.com/NocSleepy/Libraries/refs/heads/main/Connection/Connection.lua"))()
+--local TestLibrary = loadstring(game:HttpGet("https://raw.githubusercontent.com/NocSleepy/Libraries/refs/heads/main/Test/TestLibrary.lua"))()
+--local Connection = loadstring(game:HttpGet("https://raw.githubusercontent.com/NocSleepy/Libraries/refs/heads/main/Connection/Connection.lua"))()
 
-TestLibrary:TestFunction()
+--TestLibrary:TestFunction()
 
 -----------------------
 -- SERVICES --
@@ -46,42 +46,12 @@ local ToHook = {
 	["jumppower"] = hum.JumpPower
 }
 
-local LoadedCharacters = {}
-local LoadedEnemies = {}
+--local LoadedCharacters = {}
+--local LoadedEnemies = {}
 
 -- @CONNECTIONS
-local _connectionOfCharFAdded = Characters.ChildAdded:Connect(function(addedInstance)
-    if (addedInstance:IsA('Model')) and LoadedCharacters[addedInstance] == nil then
-        local targetHRP = addedInstance:FindFirstChild('HumanoidRootPart')
-
-        LoadedCharacters[addedInstance] = {
-            defaultHitboxSize = targetHRP.Size
-        }
-    end
-end)
-
-local _connectionOfCharFRemoved = Characters.ChildRemoved:Connect(function(removedInstance)
-    if (removedInstance:IsA('Model')) and LoadedCharacters[removedInstance] ~= nil then
-        LoadedCharacters[removedInstance] = nil
-    end
-end)
-
-local _connectionOfEnemiesFAdded = Enemies.ChildAdded:Connect(function(addedInstance)
-    if (addedInstance:IsA('Model')) and LoadedEnemies[addedInstance] == nil then
-        local targetHRP = addedInstance:FindFirstChild('HumanoidRootPart')
-
-        LoadedEnemies[addedInstance] = {
-            defaultHitboxSize = targetHRP.Size
-        }
-    end
-end)
-
-local _connectionOfEnemiesFRemoved = Enemies.ChildRemoved:Connect(function(removedInstance)
-    if (removedInstance:IsA('Model')) and LoadedEnemies[removedInstance] ~= nil then
-       LoadedEnemies[removedInstance] = nil
-    end
-end)
-
+local _connectionOfPlayerESP
+local _connectionOfEnemyESP
 
 -- @TABLES
 local FastAttackAPI = {}
@@ -92,7 +62,7 @@ local SECONDS_PER_ROTATION = 3 -- 1 full rotation in 3 5seconds since we chose 1
 
 -- @HITBOX STUFF
 local HitboxConfig = {
-    PlayerHitboxSize = nil
+    PlayerHitboxSize = nil,
     NPCHitboxSize = nil
 }
 
@@ -148,28 +118,35 @@ end
 function HitboxController(param, doWillShowESP)
     if param:lower() == 'players' then
         print('PASSED THE PARAM ARGUMENT')
-        if doWillShowESP then
-            for charInstance, _ in pairs(LoadedCharacters) do
-                if charInstance:IsA('Model') then
-                    local targetHRP = charInstance:FindFirstChild('HumanoidRootPart')
-                    
-                    if (targetHRP) and targetHRP.Size == LoadedCharacters[charInstance].defaultHitboxSize or targetHRP.Transparency == 1 then
-                        targetHRP.Transparency = 0.75
-                        targetHRP.Size = HitboxConfig.PlayerHitboxSize
-                        targetHRP.Color =  Color3.fromHex('#ff0000')
+        if doWillShowESP and (not _connectionOfPlayerESP or _connectionOfPlayerESP == nil) then
+            
+            _connectionOfPlayerESP = RunService.RenderStepped:Connect(function(dt)
+                for _, instance in pairs(Characters:GetChildren()) do
+                    if (instance:IsA('Model') and instance ~= game.Players.LocalPlayer.Character) and instance:FindFirstChild('HumanoidRootPart') then
+                        local targetHRP = instance:FindFirstChild('HumanoidRootPart')
+
+                        if (targetHRP) and targetHRP.Transparency == 1 or targetHRP.BrickColor ~= 'Really Red' or targetHRP.Size ~= HitboxConfig.PlayerHitboxSize then
+                            targetHRP.Transparency = 0.75
+                            targetHRP.Size = HitboxConfig.PlayerHitboxSize
+                            targetHRP.BrickColor = BrickColor.new('Really Red')
+                        end
                     end
                 end
-            end
+            end)
         end
         
-        if not doWillShowESP then
-            for charInstance, _ in pairs(LoadedCharacters) do
-                if charInstance:IsA('Model') then
-                    local targetHRP = charInstance:FindFirstChild('HumanoidRootPart')
-                    
-                    if (targetHRP) = charInstance:FindFirstChild('HumanoidRootPart') and targetHRP.Transparency ~= 1 then
+        if not doWillShowESP and (_connectionOfPlayerESP) then
+            _connectionOfPlayerESP:Disconnect()
+            _connectionOfPlayerESP = nil
+
+            for _, instance in pairs(Characters:GetChildren()) do
+                if (instance:IsA('Model') and instance ~= game.Players.LocalPlayer.Character) and instance:FindFirstChild('HumanoidRootPart') then
+                    local targetHRP = instance:FindFirstChild('HumanoidRootPart')
+
+                    if targetHRP and targetHRP.Transparency ~= 1 or TARGETHRP.BrickColor == 'Really Red' or targetHRP.Size == HitboxConfig.PlayerHitboxSize then
                         targetHRP.Transparency = 1
-                        targetHRP.Size = LoadedCharacters[charInstance].defaultHitboxSize
+                        targetHRP.Size = Vector3.new(2, 2, 2)
+                        targetHRP.BrickColor = BrickColor.new('Gray')
                     end
                 end
             end
@@ -177,6 +154,39 @@ function HitboxController(param, doWillShowESP)
     end
     
     if param:lower() == 'npcs' then
+        if doWillShowESP and (not _connectionOfEnemyESP or _connectionOfEnemyESP == nil) then
+            _connectionOfEnemyESP = RunService.RenderStepped:Connect(function(dt)
+                for _, instance in pairs(Enemies:GetChildren()) do
+                    if instance:IsA('Model') and instance:FindFirstChild('HumanoidRootPart') then
+                        local targetHRP = instance:FindFirstChild('HumanoidRootPart')
+
+                        if (targetHRP) and targetHRP.Transparency == 1 or targetHRP.BrickColor ~= 'Really Red' or targetHRP.Size ~= HitboxConfig.NPCHitboxSize then
+                            targetHRP.Transparency = 0.75
+                            targetHRP.Size = HitboxConfig.NPCHitboxSize
+                            targetHRP.BrickColor = BrickColor.new('Really Red')
+                        end
+                    end
+                end
+            end)
+        end
+
+        if not doWillShowESP and (_connectionOfEnemyESP) then
+
+            for _, instance in pairs(Enemies:GetChildren()) do
+                if instance:IsA('Model') and instance:FindFirstChild('HumanoidRootPart') then
+                    local targetHRP = instance:FindFirstChild('HumanoidRootPart')
+
+                    if (targetHRP) and targetHRP.Transparency ~= 1 or targetHRP.BrickColor == 'Really Red' or targetHRP.Size == HitboxConfig.NPCHitboxSize then
+                        targetHRP.Transparency = 1
+                        targetHRP.Size = Vector3.new(2, 2, 2)
+                        targetHRP.BrickColor = BrickColor.new('Gray')
+                    end
+                end
+            end
+
+            _connectionOfEnemyESP:Disconnect()
+            _connectionOfEnemyESP = nil
+        end
     end
 end
 
